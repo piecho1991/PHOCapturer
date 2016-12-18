@@ -21,13 +21,13 @@ namespace PHOCapturer
         private ManualResetEvent _mreCapture = new ManualResetEvent(false);
         private Thread _thScreenWorker = null;
         private Thread _thCaptureWorker = null;
-        private Queue<PHOCapturerItem> _screenStack = null;
+        private Queue<IntPtr> _screenQueue = null;
         private object _oLock = new object();
 
         public PHOCapturerWorker()
         {
             Debug.WriteLine("Konstruktor PHOCapturerWorker()");
-            _screenStack = new Queue<PHOCapturerItem>(10); //TODO: Parametr
+            _screenQueue = new Queue<IntPtr>(10); //TODO: Parametr
         }
 
         public void Start()
@@ -103,17 +103,12 @@ namespace PHOCapturer
                         {
                             Debug.WriteLine("Add Screen to Queue");
 
-                            while (_screenStack.Count >= 10)
-                                _screenStack.Dequeue();
+                            while (_screenQueue.Count >= 10) _screenQueue.Dequeue();
 
-                            _screenStack.Enqueue(
-                                new PHOCapturerItem()
-                                {
-                                    ScreenBitmap = bitmap,
-                                    CreationDate = DateTime.Now
-                                }
-                            );
+                            _screenQueue.Enqueue(bitmap.GetHbitmap());
                         }
+
+                        bitmap.Save("D:\\fbnasifbasf.jpg", ImageFormat.Jpeg);
                     }
                 }
 
@@ -135,23 +130,22 @@ namespace PHOCapturer
                 Debug.WriteLine("CaptureWorker() Wait 00:00:02");
                 if (_mreCapture.WaitOne(TimeSpan.Parse("00:00:02")))
                 {
-                    PHOCapturerItem[] tmpScreens = new PHOCapturerItem[10];
+                    IntPtr[] tmpScreens = new IntPtr[10];
 
                     lock (_oLock)
                     {
                         Debug.WriteLine("Copy Queue to Array");
-                        _screenStack.CopyTo(tmpScreens, 0);
+                        _screenQueue.CopyTo(tmpScreens, 0);
                     }
 
                     GifBitmapEncoder gifEncoder = new GifBitmapEncoder();
 
-                    foreach (PHOCapturerItem img in tmpScreens)
+                    foreach (IntPtr img in tmpScreens)
                     {
                         if (img == null) continue;
 
                         Debug.WriteLine("Iterate array - add frames to gif");
-                        var bmp = img.ScreenBitmap.GetHbitmap();
-                        var bmpSrc = Imaging.CreateBitmapSourceFromHBitmap(bmp, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                        BitmapSource bmpSrc = Imaging.CreateBitmapSourceFromHBitmap(img, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
 
                         gifEncoder.Frames.Add(BitmapFrame.Create(bmpSrc));
                     }

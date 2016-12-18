@@ -22,17 +22,21 @@ namespace PHOCapturerTest
 
         private void timer1_Tick(object sender, EventArgs e)
         {
-            label1.Text = DateTime.Now.ToShortTimeString();
+            label1.Text = DateTime.Now.ToLongTimeString();
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
             worker.Start();
+            timer1.Enabled = true;
+            timer1.Start();
         }
 
         private void button2_Click(object sender, EventArgs e)
         {
             worker.Stop();
+            timer1.Enabled = false;
+            timer1.Stop();
         }
 
         private void button3_Click(object sender, EventArgs e)
