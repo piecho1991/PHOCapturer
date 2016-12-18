@@ -11,6 +11,7 @@ using System.Windows.Forms;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Diagnostics;
+using System.Collections.Concurrent;
 
 namespace PHOCapturer
 {
@@ -21,13 +22,13 @@ namespace PHOCapturer
         private ManualResetEvent _mreCapture = new ManualResetEvent(false);
         private Thread _thScreenWorker = null;
         private Thread _thCaptureWorker = null;
-        private Queue<IntPtr> _screenQueue = null;
+        private Queue<Bitmap> _screenQueue = null;
         private object _oLock = new object();
 
         public PHOCapturerWorker()
         {
             Debug.WriteLine("Konstruktor PHOCapturerWorker()");
-            _screenQueue = new Queue<IntPtr>(10); //TODO: Parametr
+            _screenQueue = new Queue<Bitmap>(10); //TODO: Parametr
         }
 
         public void Start()
@@ -93,22 +94,19 @@ namespace PHOCapturer
                 Debug.WriteLine("ScreenWorker() Wait 00:00:01");
                 bool bEnd = _mreWorkerEnd.WaitOne(TimeSpan.Parse("00:00:01")); // TODO: Parametr
 
-                using (Bitmap bitmap = new Bitmap(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height))
+                Bitmap bitmap = new Bitmap(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height);
+
+                using (Graphics graph = Graphics.FromImage(bitmap))
                 {
-                    using (Graphics graph = Graphics.FromImage(bitmap))
+                    graph.CopyFromScreen(0, 0, 0, 0, bitmap.Size);
+
+                    lock (_oLock)
                     {
-                        graph.CopyFromScreen(0, 0, 0, 0, bitmap.Size);
+                        Debug.WriteLine("Add Screen to Queue");
 
-                        lock (_oLock)
-                        {
-                            Debug.WriteLine("Add Screen to Queue");
+                        while (_screenQueue.Count >= 10) _screenQueue.Dequeue().Dispose();
 
-                            while (_screenQueue.Count >= 10) _screenQueue.Dequeue();
-
-                            _screenQueue.Enqueue(bitmap.GetHbitmap());
-                        }
-
-                        bitmap.Save("D:\\fbnasifbasf.jpg", ImageFormat.Jpeg);
+                        _screenQueue.Enqueue(bitmap);
                     }
                 }
 
@@ -125,38 +123,40 @@ namespace PHOCapturer
         {
             while (true)
             {
-                bool bEnd = _mreCaptureEnd.WaitOne(0);
+                bool bEnd = _mreCaptureEnd.WaitOne(25);
 
-                Debug.WriteLine("CaptureWorker() Wait 00:00:02");
-                if (_mreCapture.WaitOne(TimeSpan.Parse("00:00:02")))
+                if (_mreCapture.WaitOne(0))
                 {
-                    IntPtr[] tmpScreens = new IntPtr[10];
+                    Debug.WriteLine("Wait gif");
+                    Thread.Sleep(TimeSpan.Parse("00:00:02"));
+                    Debug.WriteLine("Create gif");
+
+                    Bitmap[] tmpScreens = new Bitmap[10];
 
                     lock (_oLock)
                     {
-                        Debug.WriteLine("Copy Queue to Array");
                         _screenQueue.CopyTo(tmpScreens, 0);
                     }
 
                     GifBitmapEncoder gifEncoder = new GifBitmapEncoder();
 
-                    foreach (IntPtr img in tmpScreens)
+                    foreach (Bitmap img in tmpScreens)
                     {
                         if (img == null) continue;
 
-                        Debug.WriteLine("Iterate array - add frames to gif");
-                        BitmapSource bmpSrc = Imaging.CreateBitmapSourceFromHBitmap(img, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-
+                        BitmapSource bmpSrc = Imaging.CreateBitmapSourceFromHBitmap(img.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
                         gifEncoder.Frames.Add(BitmapFrame.Create(bmpSrc));
+
+                            img.Dispose();
                     }
 
-                    Debug.WriteLine("Save gif");
                     using (FileStream fs = new FileStream("D:\\gif.gif", FileMode.Create))
                     {
                         gifEncoder.Save(fs);
                     }
 
-                    Debug.WriteLine("End Capture");
+                    GC.SuppressFinalize(tmpScreens);
+                    GC.Collect();
                     _mreCapture.Reset();
                 }
 
