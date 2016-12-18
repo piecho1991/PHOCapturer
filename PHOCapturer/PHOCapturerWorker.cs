@@ -42,14 +42,7 @@ namespace PHOCapturer
         {
             while(true)
             {
-                Thread.Sleep(1000); // CO SEKUNDE ROBI SCREEN
-
-                // WPIERDOL ŁAPANIE SCREENA
-
-                if(_mreCapture.WaitOne())
-                {
-                    // TUTAJ KOPIUJEMY OBJECT I PRZETWARZAMY GO DALEJ :)
-                }
+                Thread.Sleep(1000);
             }
         }
     }
