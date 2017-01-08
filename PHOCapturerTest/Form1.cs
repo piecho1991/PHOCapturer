@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using PHOCapturer;
+using System.IO;
 
 namespace PHOCapturerTest
 {
@@ -41,7 +42,21 @@ namespace PHOCapturerTest
 
         private void button3_Click(object sender, EventArgs e)
         {
-            worker.Capture();
+            string dir = AppDomain.CurrentDomain.BaseDirectory + "capture//";
+            Directory.CreateDirectory(dir);
+
+            StringBuilder filename = new StringBuilder();
+            filename
+                .Append(DateTime.Now.Hour.ToString())
+                .Append("_")
+                .Append(DateTime.Now.Minute.ToString())
+                .Append("_")
+                .Append(DateTime.Now.Second.ToString())
+                .Append("_")
+                .Append(DateTime.Now.Millisecond.ToString())
+                .Append(".gif");
+
+            worker.Capture(dir + filename.ToString());
         }
     }
 }

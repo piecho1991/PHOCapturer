@@ -24,6 +24,7 @@ namespace PHOCapturer
         private Thread _thCaptureWorker = null;
         private Queue<Bitmap> _screenQueue = null;
         private object _oLock = new object();
+        private string _filePath = "temp.gif";
 
         public PHOCapturerWorker()
         {
@@ -78,11 +79,12 @@ namespace PHOCapturer
             _thCaptureWorker = null;
         }
 
-        public void Capture()
+        public void Capture(string filePath)
         {
             if (_thScreenWorker != null && _thCaptureWorker != null)
             {
                 Debug.WriteLine("-------------CAPTURE !!!!!-----------------");
+                _filePath = filePath;
                 _mreCapture.Set();
             }
         }
@@ -150,7 +152,7 @@ namespace PHOCapturer
                             img.Dispose();
                     }
 
-                    using (FileStream fs = new FileStream("D:\\gif.gif", FileMode.Create))
+                    using (FileStream fs = new FileStream(_filePath, FileMode.Create))
                     {
                         gifEncoder.Save(fs);
                     }
