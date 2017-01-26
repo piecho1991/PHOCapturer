@@ -12,6 +12,7 @@ using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Drawing.Drawing2D;
 
 namespace PHOCapturer
 {
@@ -23,6 +24,7 @@ namespace PHOCapturer
         private Thread _thScreenWorker = null;
         private Thread _thCaptureWorker = null;
         private Queue<Bitmap> _screenQueue = null;
+
         private object _oLock = new object();
 
         public PHOCapturerWorker()
@@ -98,27 +100,40 @@ namespace PHOCapturer
 
                 using (Graphics graph = Graphics.FromImage(bitmap))
                 {
-                    graph.CopyFromScreen(0, 0, 0, 0, bitmap.Size);
+                    graph.CompositingMode = CompositingMode.SourceOver;
+                    graph.CompositingQuality = CompositingQuality.HighSpeed;
+                    graph.InterpolationMode = InterpolationMode.Low;
+                    graph.SmoothingMode = SmoothingMode.HighSpeed;
+                    graph.PixelOffsetMode = PixelOffsetMode.HighSpeed;
 
+                    graph.CopyFromScreen(0, 0, 0, 0, bitmap.Size);
                     lock (_oLock)
                     {
                         Debug.WriteLine("Add Screen to Queue");
 
-                        while (_screenQueue.Count >= 10) _screenQueue.Dequeue().Dispose();
+                        while (_screenQueue.Count >= 10)
+                            _screenQueue.Dequeue().Dispose();
 
                         _screenQueue.Enqueue(bitmap);
+
+                        Debug.WriteLine("Screen count: " + _screenQueue.Count);
                     }
                 }
 
                 if (bEnd)
                 {
                     Debug.WriteLine("Break ScreenWorker()");
+
+                    while (_screenQueue.Count > 0)
+                        _screenQueue.Dequeue().Dispose();
+
                     _mreWorkerEnd.Reset();
                     break;
                 }
             }
         }
 
+        [Obsolete]
         private void CaptureWorker()
         {
             while (true)
@@ -132,22 +147,23 @@ namespace PHOCapturer
                     Debug.WriteLine("Create gif");
 
                     Bitmap[] tmpScreens = new Bitmap[10];
+                    GifBitmapEncoder gifEncoder = new GifBitmapEncoder();
 
                     lock (_oLock)
                     {
                         _screenQueue.CopyTo(tmpScreens, 0);
                     }
 
-                    GifBitmapEncoder gifEncoder = new GifBitmapEncoder();
-
                     foreach (Bitmap img in tmpScreens)
                     {
                         if (img == null) continue;
 
+                        // TUTAJ NIE JEST CZYSZCZONA PAMIEć
+                        // MECHANIZM TWORZENIA GIFA JEST DO DUPY
+                        // BitmapSource i BitmapFrame nie ma Dispose co powoduje wycieki pamieci
+
                         BitmapSource bmpSrc = Imaging.CreateBitmapSourceFromHBitmap(img.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
                         gifEncoder.Frames.Add(BitmapFrame.Create(bmpSrc));
-
-                            img.Dispose();
                     }
 
                     using (FileStream fs = new FileStream("D:\\gif.gif", FileMode.Create))
@@ -155,6 +171,11 @@ namespace PHOCapturer
                         gifEncoder.Save(fs);
                     }
 
+                    gifEncoder.Frames.Clear(); // czyszczenie ramek gifa
+
+                    foreach (var img in tmpScreens) img.Dispose();
+
+                    GC.SuppressFinalize(gifEncoder);
                     GC.SuppressFinalize(tmpScreens);
                     GC.Collect();
                     _mreCapture.Reset();
